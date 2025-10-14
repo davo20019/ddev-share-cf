@@ -113,8 +113,9 @@ if ! command -v cloudflared &> /dev/null; then
     exit 1
 fi
 
-# Get DDEV site URL
+# Get DDEV site URL and hostname
 DDEV_PRIMARY_URL=$(ddev describe -j | grep -o '"primary_url":"[^"]*' | cut -d'"' -f4)
+DDEV_HOSTNAME=$(ddev describe -j | grep -o '"hostname":"[^"]*' | head -1 | cut -d'"' -f4)
 
 if [ -z "$DDEV_PRIMARY_URL" ]; then
     echo -e "${RED}❌ Could not determine DDEV site URL${NC}"
@@ -132,5 +133,5 @@ echo ""
 echo -e "${YELLOW}💡 Tip: Press Ctrl+C to stop the tunnel${NC}"
 echo ""
 
-# Start the tunnel pointing to the DDEV site
-cloudflared tunnel --url "$DDEV_PRIMARY_URL"
+# Start the tunnel pointing to the DDEV site with proper host header
+cloudflared tunnel --url "$DDEV_PRIMARY_URL" --http-host-header "$DDEV_HOSTNAME"
