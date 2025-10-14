@@ -16,14 +16,45 @@ This DDEV addon provides a simple command to share your local DDEV sites publicl
 - 🔒 **Secure** - No need to open ports on your firewall
 - ⚡ **Fast** - Powered by Cloudflare's global network
 - 🎯 **Zero configuration** - No account or API tokens required
-- 🔄 **Auto-install** - Automatically installs `cloudflared` if not present
+- 💻 **Cross-platform** - Works on macOS, Linux, and Windows/WSL2
 
 ## Requirements
 
 - DDEV v1.21.0 or higher
-- macOS, Linux, or WSL2
+- `cloudflared` binary installed on your host machine
+- macOS, Linux, or Windows/WSL2
 
 ## Installation
+
+### 1. Install cloudflared
+
+First, install `cloudflared` on your host machine:
+
+**macOS (Homebrew):**
+```bash
+brew install cloudflared
+```
+
+**Debian/Ubuntu:**
+```bash
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+sudo dpkg -i cloudflared.deb
+```
+
+**RHEL/CentOS/Fedora:**
+```bash
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.rpm -o cloudflared.rpm
+sudo rpm -i cloudflared.rpm
+```
+
+**Windows:**
+```powershell
+winget install --id Cloudflare.cloudflared
+```
+
+For other installation methods, see the [Cloudflare documentation](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
+
+### 2. Install the DDEV addon
 
 ```bash
 ddev add-on get davo20019/ddev-share-cf
@@ -38,7 +69,7 @@ ddev share-cf
 ```
 
 This will:
-1. Install `cloudflared` if it's not already installed
+1. Check if `cloudflared` is installed (shows installation instructions if not)
 2. Start a Cloudflare Tunnel
 3. Display a public URL you can share (like `https://randomly-generated.trycloudflare.com`)
 
@@ -48,8 +79,8 @@ Press **Ctrl+C** to stop the tunnel when you're done.
 
 When you run `ddev share-cf`, the addon:
 
-1. Checks if `cloudflared` is installed (installs it automatically if needed)
-2. Creates a temporary Cloudflare Tunnel
+1. Verifies `cloudflared` is installed on your host machine
+2. Creates a temporary Cloudflare Tunnel pointing to your DDEV site
 3. Routes public traffic through Cloudflare's network to your local DDEV site
 4. No Cloudflare account or configuration required
 
@@ -76,11 +107,17 @@ Perfect for:
 
 ## Troubleshooting
 
+### cloudflared not found
+
+If you get an error that `cloudflared` is not installed, the command will automatically detect your operating system and show you the appropriate installation instructions.
+
+You can also manually install cloudflared by following the instructions in the [Installation](#installation) section above.
+
 ### Command not found after installation
 
-Restart your terminal or run:
+Make sure the addon is properly installed:
 ```bash
-ddev restart
+ddev add-on get davo20019/ddev-share-cf
 ```
 
 ### Permission denied error
@@ -90,20 +127,12 @@ The script should be executable, but if you encounter issues:
 chmod +x .ddev/commands/host/share-cf
 ```
 
-### Cloudflared installation fails
+### Project not running
 
-You can manually install cloudflared:
-
-**macOS (Homebrew):**
+Make sure your DDEV project is running before starting the tunnel:
 ```bash
-brew install cloudflared
-```
-
-**Linux:**
-```bash
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
-sudo mv cloudflared /usr/local/bin/cloudflared
-sudo chmod +x /usr/local/bin/cloudflared
+ddev start
+ddev share-cf
 ```
 
 ## Related Resources
