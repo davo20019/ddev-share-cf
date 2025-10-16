@@ -131,7 +131,23 @@ echo ""
 echo -e "${CYAN}📍 Local site: ${DDEV_PRIMARY_URL}${NC}"
 echo ""
 echo -e "${YELLOW}💡 Tip: Press Ctrl+C to stop the tunnel${NC}"
+
+# Detect Drupal multisite setup
+SITES_PHP_PATH=""
+if [ -f "web/sites/sites.php" ]; then
+    SITES_PHP_PATH="web/sites/sites.php"
+elif [ -f "docroot/sites/sites.php" ]; then
+    SITES_PHP_PATH="docroot/sites/sites.php"
+fi
+
+if [ -n "$SITES_PHP_PATH" ]; then
+    echo -e "${CYAN}ℹ️  Drupal multisite detected${NC}"
+    echo -e "${YELLOW}📝 Note: If using multisite, add the tunnel URL to ${SITES_PHP_PATH}${NC}"
+    echo -e "${YELLOW}   Example: \$sites['tunnel-url.trycloudflare.com'] = 'subsite';${NC}"
+fi
+
 echo ""
 
 # Start the tunnel pointing to the DDEV site with proper host header
+# The tunnel URL will be printed to the console by cloudflared
 cloudflared tunnel --url "$DDEV_PRIMARY_URL" --http-host-header "$DDEV_HOSTNAME"

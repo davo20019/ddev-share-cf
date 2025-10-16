@@ -136,6 +136,23 @@ ddev start
 ddev share-cf
 ```
 
+### Drupal Multisite Configuration
+
+When using with **Drupal multisite**, you need to map the Cloudflare tunnel URL to your subsite in `sites/sites.php`:
+
+1. Run `ddev share-cf` and note the generated URL (e.g., `https://random-name.trycloudflare.com`)
+2. Add the mapping to your `web/sites/sites.php`:
+
+```php
+<?php
+// Map the Cloudflare tunnel URL to your subsite
+$sites['random-name.trycloudflare.com'] = 'stage';  // Replace 'stage' with your subsite directory name
+```
+
+3. The tunnel will now correctly route to your subsite
+
+**Note:** The tunnel URL changes each time you run the command, so you'll need to update `sites.php` with the new URL for each session.
+
 ## Related Resources
 
 - [Blog post: How to Share Your Local WordPress or Drupal Site with Cloudflare Tunnel](https://davidloor.com/blog/share-local-wordpress-drupal-site-cloudflare-tunnel-free)

@@ -2,7 +2,7 @@ name: ddev-share-cf
 description: Share your DDEV sites publicly using Cloudflare Tunnel (free alternative to ddev share)
 repository: https://github.com/davo20019/ddev-share-cf
 maintainer: David Loor <https://github.com/davo20019>
-install_version: v1.2.0
+install_version: v1.3.0
 ddev_version_constraint: ">= v1.24.3"
 
 project_files:
