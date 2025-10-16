@@ -4,6 +4,7 @@ Share your DDEV sites publicly using Cloudflare Tunnel (free alternative to `dde
 
 [![version](https://img.shields.io/github/v/release/davo20019/ddev-share-cf)](https://github.com/davo20019/ddev-share-cf/releases)
 [![license](https://img.shields.io/github/license/davo20019/ddev-share-cf)](https://github.com/davo20019/ddev-share-cf/blob/main/LICENSE)
+![DDEV registry](https://img.shields.io/badge/ddev-get-blue)](https://github.com/ddev/ddev-addon-registry)
 
 ## What is this?
 

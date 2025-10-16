@@ -1,0 +1,28 @@
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  tests:
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install DDEV
+        run: |
+          curl -fsSL https://ddev.com/install.sh | bash
+
+      - name: Run tests
+        run: bats tests
