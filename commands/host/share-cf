@@ -113,22 +113,19 @@ if ! command -v cloudflared &> /dev/null; then
     exit 1
 fi
 
-# Get DDEV site URL and hostname
-DDEV_PRIMARY_URL=$(ddev describe -j | grep -o '"primary_url":"[^"]*' | cut -d'"' -f4)
-DDEV_HOSTNAME=$(ddev describe -j | grep -o '"hostname":"[^"]*' | head -1 | cut -d'"' -f4)
-
-if [ -z "$DDEV_PRIMARY_URL" ]; then
-    echo -e "${RED}❌ Could not determine DDEV site URL${NC}"
+if [ -z "$DDEV_HOST_HTTP_PORT" ]; then
+    echo -e "${RED}❌ Could not determine DDEV local port URL${NC}"
     echo -e "${YELLOW}Make sure you're in a DDEV project directory and the project is running${NC}"
     exit 1
 fi
 
 echo -e "${GREEN}✅ cloudflared is installed${NC}"
 echo ""
+DDEV_LOCALHOST_URL="http://127.0.0.1:${DDEV_HOST_HTTP_PORT}"
 echo -e "${BLUE}🚀 Starting Cloudflare Tunnel...${NC}"
 echo -e "${YELLOW}⏳ Generating public URL (this may take a few seconds)...${NC}"
 echo ""
-echo -e "${CYAN}📍 Local site: ${DDEV_PRIMARY_URL}${NC}"
+echo -e "${CYAN}📍 Local site: ${DDEV_LOCALHOST_URL}${NC}"
 echo ""
 echo -e "${YELLOW}💡 Tip: Press Ctrl+C to stop the tunnel${NC}"
 
@@ -150,4 +147,4 @@ echo ""
 
 # Start the tunnel pointing to the DDEV site with proper host header
 # The tunnel URL will be printed to the console by cloudflared
-cloudflared tunnel --url "$DDEV_PRIMARY_URL" --http-host-header "$DDEV_HOSTNAME"
+cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
