@@ -145,7 +145,7 @@ fi
 
 # Detect WordPress installation
 WORDPRESS_DETECTED=false
-if [ -f "wp-config.php" ] || [ -f "web/wp-config.php" ] || [ -f "docroot/wp-config.php" ]; then
+if [ "$DDEV_PROJECT_TYPE" = "wordpress" ]; then
     WORDPRESS_DETECTED=true
 fi
 
