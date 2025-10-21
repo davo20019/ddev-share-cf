@@ -138,10 +138,13 @@ ddev share-cf
 
 ### Drupal Multisite Configuration
 
-When using with **Drupal multisite**, you need to map the Cloudflare tunnel URL to your subsite in `sites/sites.php`:
+The addon **automatically detects** Drupal multisite setups by checking for `sites/sites.php`. When detected, it adjusts the tunnel configuration to properly support multisite routing.
 
-1. Run `ddev share-cf` and note the generated URL (e.g., `https://random-name.trycloudflare.com`)
-2. Add the mapping to your `web/sites/sites.php`:
+To use with **Drupal multisite**:
+
+1. Run `ddev share-cf` - it will detect multisite and display: `ℹ️ Drupal multisite detected`
+2. Note the generated URL (e.g., `https://random-name.trycloudflare.com`)
+3. Add the mapping to your `web/sites/sites.php`:
 
 ```php
 <?php
@@ -149,7 +152,7 @@ When using with **Drupal multisite**, you need to map the Cloudflare tunnel URL 
 $sites['random-name.trycloudflare.com'] = 'stage';  // Replace 'stage' with your subsite directory name
 ```
 
-3. The tunnel will now correctly route to your subsite
+4. The tunnel will now correctly route to your subsite
 
 **Note:** The tunnel URL changes each time you run the command, so you'll need to update `sites.php` with the new URL for each session.
 
