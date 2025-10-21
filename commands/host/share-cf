@@ -119,6 +119,9 @@ if [ -z "$DDEV_HOST_HTTP_PORT" ]; then
     exit 1
 fi
 
+# Extract the first hostname for the Host header (needed for multisite support)
+DDEV_FIRST_HOSTNAME=$(echo "$DDEV_HOSTNAME" | cut -d',' -f1)
+
 echo -e "${GREEN}✅ cloudflared is installed${NC}"
 echo ""
 DDEV_LOCALHOST_URL="http://127.0.0.1:${DDEV_HOST_HTTP_PORT}"
@@ -131,20 +134,30 @@ echo -e "${YELLOW}💡 Tip: Press Ctrl+C to stop the tunnel${NC}"
 
 # Detect Drupal multisite setup
 SITES_PHP_PATH=""
+MULTISITE_DETECTED=false
 if [ -f "web/sites/sites.php" ]; then
     SITES_PHP_PATH="web/sites/sites.php"
+    MULTISITE_DETECTED=true
 elif [ -f "docroot/sites/sites.php" ]; then
     SITES_PHP_PATH="docroot/sites/sites.php"
+    MULTISITE_DETECTED=true
 fi
 
-if [ -n "$SITES_PHP_PATH" ]; then
+if [ "$MULTISITE_DETECTED" = true ]; then
     echo -e "${CYAN}ℹ️  Drupal multisite detected${NC}"
-    echo -e "${YELLOW}📝 Note: If using multisite, add the tunnel URL to ${SITES_PHP_PATH}${NC}"
+    echo -e "${YELLOW}📝 Note: Add the tunnel URL to ${SITES_PHP_PATH}${NC}"
     echo -e "${YELLOW}   Example: \$sites['tunnel-url.trycloudflare.com'] = 'subsite';${NC}"
 fi
 
 echo ""
 
-# Start the tunnel pointing to the DDEV site with proper host header
-# The tunnel URL will be printed to the console by cloudflared
-cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
+# Start the tunnel pointing to the DDEV site
+# For multisite setups, we don't send a host header so the tunnel URL can be matched in sites.php
+# For regular sites, we send the host header for proper routing
+if [ "$MULTISITE_DETECTED" = true ]; then
+    echo -e "${CYAN}💡 Multisite mode: Host header will be the tunnel URL${NC}"
+    echo ""
+    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
+else
+    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}" --http-host-header "${DDEV_FIRST_HOSTNAME}"
+fi
