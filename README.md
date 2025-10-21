@@ -181,6 +181,33 @@ ddev wp option update siteurl 'https://yoursite.ddev.site'
 
 **Note:** The tunnel URL changes each time you run the command, so you'll need to update the URLs for each session. Alternatively, consider using the [Relative URL](https://wordpress.org/plugins/relative-url/) plugin for easier multi-domain support.
 
+### Magento Base URL Redirects
+
+The addon **automatically detects** Magento installations. Like WordPress, Magento stores base URLs in the database (`core_config_data` table), which causes redirects (like admin login) to redirect back to your local domain.
+
+When Magento is detected, the addon will display instructions. To fix redirects:
+
+1. Run `ddev share-cf` and note the generated URL (e.g., `https://random-name.trycloudflare.com`)
+2. Update Magento base URLs:
+
+```bash
+# Update to tunnel URL (include trailing slash)
+ddev exec bin/magento config:set web/unsecure/base_url 'https://random-name.trycloudflare.com/'
+ddev exec bin/magento config:set web/secure/base_url 'https://random-name.trycloudflare.com/'
+ddev exec bin/magento cache:flush
+```
+
+3. When done, revert back to local URLs:
+
+```bash
+# Revert to local domain
+ddev exec bin/magento config:set web/unsecure/base_url 'https://yoursite.ddev.site/'
+ddev exec bin/magento config:set web/secure/base_url 'https://yoursite.ddev.site/'
+ddev exec bin/magento cache:flush
+```
+
+**Note:** The tunnel URL changes each time you run the command, so you'll need to update the base URLs for each session.
+
 ## Related Resources
 
 - [Blog post: How to Share Your Local WordPress or Drupal Site with Cloudflare Tunnel](https://davidloor.com/blog/share-local-wordpress-drupal-site-cloudflare-tunnel-free)
