@@ -143,10 +143,24 @@ elif [ -f "docroot/sites/sites.php" ]; then
     MULTISITE_DETECTED=true
 fi
 
+# Detect WordPress installation
+WORDPRESS_DETECTED=false
+if [ -f "wp-config.php" ] || [ -f "web/wp-config.php" ] || [ -f "docroot/wp-config.php" ]; then
+    WORDPRESS_DETECTED=true
+fi
+
 if [ "$MULTISITE_DETECTED" = true ]; then
     echo -e "${CYAN}ℹ️  Drupal multisite detected${NC}"
     echo -e "${YELLOW}📝 Note: Add the tunnel URL to ${SITES_PHP_PATH}${NC}"
     echo -e "${YELLOW}   Example: \$sites['tunnel-url.trycloudflare.com'] = 'subsite';${NC}"
+fi
+
+if [ "$WORDPRESS_DETECTED" = true ]; then
+    echo -e "${CYAN}ℹ️  WordPress detected${NC}"
+    echo -e "${YELLOW}⚠️  Note: WordPress redirects may use the local domain instead of tunnel URL${NC}"
+    echo -e "${YELLOW}   To fix, update URLs after tunnel starts:${NC}"
+    echo -e "${YELLOW}   ddev wp option update home 'https://your-tunnel-url.trycloudflare.com'${NC}"
+    echo -e "${YELLOW}   ddev wp option update siteurl 'https://your-tunnel-url.trycloudflare.com'${NC}"
 fi
 
 echo ""

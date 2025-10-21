@@ -156,6 +156,31 @@ $sites['random-name.trycloudflare.com'] = 'stage';  // Replace 'stage' with your
 
 **Note:** The tunnel URL changes each time you run the command, so you'll need to update `sites.php` with the new URL for each session.
 
+### WordPress URL Redirects
+
+The addon **automatically detects** WordPress installations. WordPress stores site URLs in the database, which can cause redirects (like after login) to redirect back to your local domain instead of staying on the tunnel URL.
+
+When WordPress is detected, the addon will display instructions. To fix redirects:
+
+1. Run `ddev share-cf` and note the generated URL (e.g., `https://random-name.trycloudflare.com`)
+2. Update WordPress URLs using WP-CLI:
+
+```bash
+# Update to tunnel URL
+ddev wp option update home 'https://random-name.trycloudflare.com'
+ddev wp option update siteurl 'https://random-name.trycloudflare.com'
+```
+
+3. When done, revert back to local URLs:
+
+```bash
+# Revert to local domain
+ddev wp option update home 'https://yoursite.ddev.site'
+ddev wp option update siteurl 'https://yoursite.ddev.site'
+```
+
+**Note:** The tunnel URL changes each time you run the command, so you'll need to update the URLs for each session. Alternatively, consider using the [Relative URL](https://wordpress.org/plugins/relative-url/) plugin for easier multi-domain support.
+
 ## Related Resources
 
 - [Blog post: How to Share Your Local WordPress or Drupal Site with Cloudflare Tunnel](https://davidloor.com/blog/share-local-wordpress-drupal-site-cloudflare-tunnel-free)
