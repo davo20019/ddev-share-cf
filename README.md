@@ -138,10 +138,13 @@ ddev share-cf
 
 ### Drupal Multisite Configuration
 
-When using with **Drupal multisite**, you need to map the Cloudflare tunnel URL to your subsite in `sites/sites.php`:
+The addon **automatically detects** Drupal multisite setups by checking for `sites/sites.php`. When detected, it adjusts the tunnel configuration to properly support multisite routing.
 
-1. Run `ddev share-cf` and note the generated URL (e.g., `https://random-name.trycloudflare.com`)
-2. Add the mapping to your `web/sites/sites.php`:
+To use with **Drupal multisite**:
+
+1. Run `ddev share-cf` - it will detect multisite and display: `ℹ️ Drupal multisite detected`
+2. Note the generated URL (e.g., `https://random-name.trycloudflare.com`)
+3. Add the mapping to your `web/sites/sites.php`:
 
 ```php
 <?php
@@ -149,9 +152,61 @@ When using with **Drupal multisite**, you need to map the Cloudflare tunnel URL 
 $sites['random-name.trycloudflare.com'] = 'stage';  // Replace 'stage' with your subsite directory name
 ```
 
-3. The tunnel will now correctly route to your subsite
+4. The tunnel will now correctly route to your subsite
 
 **Note:** The tunnel URL changes each time you run the command, so you'll need to update `sites.php` with the new URL for each session.
+
+### WordPress URL Redirects
+
+The addon **automatically detects** WordPress installations. WordPress stores site URLs in the database, which can cause redirects (like after login) to redirect back to your local domain instead of staying on the tunnel URL.
+
+When WordPress is detected, the addon will display instructions. To fix redirects:
+
+1. Run `ddev share-cf` and note the generated URL (e.g., `https://random-name.trycloudflare.com`)
+2. Update WordPress URLs using WP-CLI:
+
+```bash
+# Update to tunnel URL
+ddev wp option update home 'https://random-name.trycloudflare.com'
+ddev wp option update siteurl 'https://random-name.trycloudflare.com'
+```
+
+3. When done, revert back to local URLs:
+
+```bash
+# Revert to local domain
+ddev wp option update home 'https://yoursite.ddev.site'
+ddev wp option update siteurl 'https://yoursite.ddev.site'
+```
+
+**Note:** The tunnel URL changes each time you run the command, so you'll need to update the URLs for each session. Alternatively, consider using the [Relative URL](https://wordpress.org/plugins/relative-url/) plugin for easier multi-domain support.
+
+### Magento Base URL Redirects
+
+The addon **automatically detects** Magento installations. Like WordPress, Magento stores base URLs in the database (`core_config_data` table), which causes redirects (like admin login) to redirect back to your local domain.
+
+When Magento is detected, the addon will display instructions. To fix redirects:
+
+1. Run `ddev share-cf` and note the generated URL (e.g., `https://random-name.trycloudflare.com`)
+2. Update Magento base URLs:
+
+```bash
+# Update to tunnel URL (include trailing slash)
+ddev exec bin/magento config:set web/unsecure/base_url 'https://random-name.trycloudflare.com/'
+ddev exec bin/magento config:set web/secure/base_url 'https://random-name.trycloudflare.com/'
+ddev exec bin/magento cache:flush
+```
+
+3. When done, revert back to local URLs:
+
+```bash
+# Revert to local domain
+ddev exec bin/magento config:set web/unsecure/base_url 'https://yoursite.ddev.site/'
+ddev exec bin/magento config:set web/secure/base_url 'https://yoursite.ddev.site/'
+ddev exec bin/magento cache:flush
+```
+
+**Note:** The tunnel URL changes each time you run the command, so you'll need to update the base URLs for each session.
 
 ## Related Resources
 
