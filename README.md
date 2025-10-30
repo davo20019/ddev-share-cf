@@ -23,7 +23,9 @@ This DDEV addon provides a simple command to share your local DDEV sites publicl
 
 - DDEV v1.21.0 or higher
 - `cloudflared` binary installed on your host machine
-- macOS, Linux, or Windows/WSL2
+- macOS, Linux, or Windows with WSL2
+
+**Important for Windows users:** This addon requires WSL2. You must install and run DDEV in WSL2, not natively on Windows. See the [WSL2 section](#windows-with-wsl2) below for details.
 
 ## Installation
 
@@ -48,10 +50,19 @@ curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloud
 sudo rpm -i cloudflared.rpm
 ```
 
-**Windows:**
-```powershell
-winget install --id Cloudflare.cloudflared
+**Windows with WSL2:**
+
+> **Important:** This addon requires WSL2. WSL2 is your "host" environment where both DDEV and cloudflared must be installed.
+
+If you're using DDEV with WSL2 (the recommended approach for Windows), follow the Linux instructions above **inside your WSL2 terminal**. For example, if using Ubuntu in WSL2:
+
+```bash
+# Run this inside your WSL2 terminal (not PowerShell or CMD)
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+sudo dpkg -i cloudflared.deb
 ```
+
+**Do NOT install cloudflared on Windows itself** - it needs to be installed in WSL2 where DDEV runs.
 
 For other installation methods, see the [Cloudflare documentation](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
 
@@ -108,7 +119,21 @@ Perfect for:
 
 ## Troubleshooting
 
-### cloudflared not found
+### Windows/WSL2: cloudflared not found
+
+If you're using Windows with WSL2 and getting a "cloudflared not found" error:
+
+1. **Verify you're in WSL2**: Open your WSL2 terminal (Ubuntu, Debian, etc.) - not PowerShell or CMD
+2. **Install cloudflared in WSL2**: Follow the Linux installation instructions in your WSL2 terminal:
+   ```bash
+   curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+   sudo dpkg -i cloudflared.deb
+   ```
+3. **Run all DDEV commands in WSL2**: Both `ddev` and `ddev share-cf` must be run from your WSL2 terminal
+
+**Common mistake:** Installing cloudflared on Windows (via winget or PowerShell) instead of in WSL2. Remember: WSL2 is your "host" environment, not Windows.
+
+### cloudflared not found (macOS/Linux)
 
 If you get an error that `cloudflared` is not installed, the command will automatically detect your operating system and show you the appropriate installation instructions.
 

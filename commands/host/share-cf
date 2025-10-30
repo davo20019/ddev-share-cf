@@ -21,6 +21,12 @@ detect_system() {
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
 
+    # Check if running in WSL
+    IS_WSL=false
+    if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+        IS_WSL=true
+    fi
+
     case "$OS" in
         linux*)
             OS_TYPE="linux"
@@ -76,6 +82,10 @@ show_install_instructions() {
             echo -e "  ${BLUE}sudo chmod +x /usr/local/bin/cloudflared${NC}"
             ;;
         linux)
+            if [ "$IS_WSL" = true ]; then
+                echo -e "${CYAN}✅ WSL2 detected - Install cloudflared in WSL2:${NC}"
+                echo ""
+            fi
             echo -e "${CYAN}Debian/Ubuntu:${NC}"
             echo -e "  ${BLUE}curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_TYPE}.deb -o cloudflared.deb${NC}"
             echo -e "  ${BLUE}sudo dpkg -i cloudflared.deb${NC}"
@@ -90,10 +100,13 @@ show_install_instructions() {
             echo -e "  ${BLUE}sudo chmod +x /usr/local/bin/cloudflared${NC}"
             ;;
         windows)
-            echo -e "${CYAN}Windows:${NC}"
-            echo -e "  ${BLUE}Download from: https://github.com/cloudflare/cloudflared/releases/latest${NC}"
-            echo -e "  ${BLUE}Or use winget: winget install --id Cloudflare.cloudflared${NC}"
-            echo -e "  ${BLUE}Or use Chocolatey: choco install cloudflared${NC}"
+            echo -e "${CYAN}Windows (WSL2):${NC}"
+            echo -e "  ${YELLOW}⚠️  Note: This addon requires WSL2. You must install cloudflared in WSL2, not on Windows.${NC}"
+            echo -e "  ${BLUE}If you see this message, you're likely running from Windows instead of WSL2.${NC}"
+            echo ""
+            echo -e "${CYAN}Install cloudflared in WSL2 (run in WSL2 terminal):${NC}"
+            echo -e "  ${BLUE}curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_TYPE}.deb -o cloudflared.deb${NC}"
+            echo -e "  ${BLUE}sudo dpkg -i cloudflared.deb${NC}"
             ;;
         *)
             echo -e "${CYAN}Unknown OS - Manual Installation:${NC}"
