@@ -194,12 +194,12 @@ fi
 echo ""
 
 # Start the tunnel pointing to the DDEV site
-# For multisite setups, we don't send a host header so the tunnel URL can be matched in sites.php
-# For regular sites, we send the host header for proper routing
+# cloudflared passes the tunnel URL as the Host header by default, which works for both
+# multisite (matched in sites.php) and regular sites (trusted via X-Forwarded-Host)
 if [ "$MULTISITE_DETECTED" = true ]; then
     echo -e "${CYAN}💡 Multisite mode: Host header will be the tunnel URL${NC}"
     echo ""
     cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
 else
-    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}" --http-host-header "${DDEV_FIRST_HOSTNAME}"
+    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
 fi
