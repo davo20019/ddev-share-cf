@@ -1,0 +1,18 @@
+# .ddev/docker-compose.cloudflared.yaml
+services:
+  cloudflared:
+    container_name: ddev-${DDEV_PROJECT_NAME}-cloudflared
+    image: cloudflare/cloudflared:latest
+    labels:
+      # Required for DDEV integration
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    # Wait for the web service to be available
+    depends_on:
+      - web
+    # The command runs the quick tunnel, targeting the DDEV web container
+    command: tunnel --url http://web:80
+    # Add a note to ddev describe for easier use
+    x-ddev-describe:
+      - "INFO: Cloudflare Tunnel Service"
+      - "INFO: Runs as a background service. Use 'ddev stop cloudflared' to turn off."
