@@ -16,190 +16,149 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Detect OS and architecture
-detect_system() {
-    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-    ARCH=$(uname -m)
+# --- Shared Variables ---
+DDEV_LOCALHOST_URL="http://127.0.0.1:${DDEV_HOST_HTTP_PORT}"
+TUNNEL_URL=""
 
-    # Check if running in WSL
-    IS_WSL=false
-    if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
-        IS_WSL=true
+# Function to run the Dockerized tunnel approach (Fallback method)
+run_docker_tunnel() {
+    echo -e "${YELLOW}⚠️ Host binary 'cloudflared' not found. Falling back to Dockerized service...${NC}"
+
+    # --- 1. Start the cloudflared service (or ensure it's running) ---
+    echo -e "${BLUE}🚀 Starting/Ensuring Cloudflare Tunnel Docker service is running...${NC}"
+
+    # Check if the service is NOT running (or not yet defined).
+    if ! ddev describe --json-output 2>/dev/null | grep -q '"service_name": "cloudflared", "status": "running"'; then
+        # We run a full 'ddev start' to reliably ensure all services, including the newly defined 'cloudflared' service,
+        # are created and running, which is the most compatible approach across DDEV versions.
+        echo -e "${YELLOW}Service not running. Running ${BLUE}ddev start${YELLOW} to initialize/start all services...${NC}"
+        ddev start > /dev/null 2>&1 || {
+            echo -e "${RED}❌ Failed to start DDEV project or 'cloudflared' service.${NC}"
+            echo -e "${YELLOW}Please check your DDEV configuration and run ${BLUE}ddev restart${YELLOW} manually.${NC}"
+            exit 1
+        }
+    fi
+    echo -e "${GREEN}✅ Cloudflare Tunnel service is active.${NC}"
+
+    # --- 2. Fetch the public URL from the logs ---
+    echo -e "${YELLOW}⏳ Generating and fetching public URL from Docker logs (this may take a few seconds)...${NC}"
+
+    # Check the logs for up to 30 seconds
+    for i in {1..30}; do
+        # Search the last 20 lines of the cloudflared container logs for the URL
+        LOG_OUTPUT=$(ddev logs -s cloudflared --tail 20 2>/dev/null)
+        TUNNEL_URL=$(echo "$LOG_OUTPUT" | grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com')
+
+        if [ -n "$TUNNEL_URL" ]; then
+            break
+        fi
+        sleep 1
+    done
+
+    if [ -z "$TUNNEL_URL" ]; then
+        echo -e "${RED}❌ Failed to find Cloudflare Tunnel URL in Docker logs after 30 seconds.${NC}"
+        echo -e "${YELLOW}Check the logs manually: ${BLUE}ddev logs -s cloudflared${NC}"
+        exit 1
     fi
 
-    case "$OS" in
-        linux*)
-            OS_TYPE="linux"
-            ;;
-        darwin*)
-            OS_TYPE="macos"
-            ;;
-        mingw*|msys*|cygwin*)
-            OS_TYPE="windows"
-            ;;
-        *)
-            OS_TYPE="unknown"
-            ;;
-    esac
-
-    case "$ARCH" in
-        x86_64|amd64)
-            ARCH_TYPE="amd64"
-            ;;
-        aarch64|arm64)
-            ARCH_TYPE="arm64"
-            ;;
-        armv7l)
-            ARCH_TYPE="arm"
-            ;;
-        *)
-            ARCH_TYPE="unknown"
-            ;;
-    esac
+    # --- 3. Output success and instructions ---
+    echo ""
+    echo -e "${GREEN}✅ Tunnel Endpoint Found (via Docker)!${NC}"
+    echo -e "${CYAN}🌍 Public URL: ${YELLOW}${TUNNEL_URL}${NC}"
+    echo ""
+    echo -e "${YELLOW}💡 Tip: To view the live logs, run: ${BLUE}ddev logs -s cloudflared -f${NC}"
+    echo "---"
 }
 
-# Show installation instructions based on detected OS
-show_install_instructions() {
+# Function to run the host binary approach (Preferred method)
+run_host_tunnel() {
+    echo -e "${GREEN}✅ Host binary 'cloudflared' found.${NC}"
+    echo -e "${BLUE}🚀 Starting Cloudflare Tunnel via host binary...${NC}"
+    echo -e "${YELLOW}⏳ Generating public URL (this may take a few seconds)...${NC}"
     echo ""
-    echo -e "${RED}❌ cloudflared is not installed on your system${NC}"
+    echo -e "${CYAN}📍 Local site: ${DDEV_LOCALHOST_URL}${NC}"
     echo ""
-    echo -e "${YELLOW}📦 Installation Instructions:${NC}"
-    echo ""
+    echo -e "${YELLOW}💡 Tip: Press Ctrl+C to stop the tunnel${NC}"
+    echo "---"
 
-    case "$OS_TYPE" in
-        macos)
-            echo -e "${CYAN}macOS (Homebrew):${NC}"
-            echo -e "  ${BLUE}brew install cloudflared${NC}"
-            echo ""
-            echo -e "${CYAN}macOS (Manual):${NC}"
-            if [[ "$ARCH_TYPE" == "arm64" ]]; then
-                echo -e "  ${BLUE}curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz -o cloudflared.tgz${NC}"
-            else
-                echo -e "  ${BLUE}curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64.tgz -o cloudflared.tgz${NC}"
-            fi
-            echo -e "  ${BLUE}tar -xzf cloudflared.tgz${NC}"
-            echo -e "  ${BLUE}sudo mv cloudflared /usr/local/bin/cloudflared${NC}"
-            echo -e "  ${BLUE}sudo chmod +x /usr/local/bin/cloudflared${NC}"
-            ;;
-        linux)
-            if [ "$IS_WSL" = true ]; then
-                echo -e "${CYAN}✅ WSL2 detected - Install cloudflared in WSL2:${NC}"
-                echo ""
-            fi
-            echo -e "${CYAN}Debian/Ubuntu:${NC}"
-            echo -e "  ${BLUE}curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_TYPE}.deb -o cloudflared.deb${NC}"
-            echo -e "  ${BLUE}sudo dpkg -i cloudflared.deb${NC}"
-            echo ""
-            echo -e "${CYAN}RHEL/CentOS/Fedora:${NC}"
-            echo -e "  ${BLUE}curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_TYPE}.rpm -o cloudflared.rpm${NC}"
-            echo -e "  ${BLUE}sudo rpm -i cloudflared.rpm${NC}"
-            echo ""
-            echo -e "${CYAN}Other Linux (Manual):${NC}"
-            echo -e "  ${BLUE}curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_TYPE} -o cloudflared${NC}"
-            echo -e "  ${BLUE}sudo mv cloudflared /usr/local/bin/cloudflared${NC}"
-            echo -e "  ${BLUE}sudo chmod +x /usr/local/bin/cloudflared${NC}"
-            ;;
-        windows)
-            echo -e "${CYAN}Windows (WSL2):${NC}"
-            echo -e "  ${YELLOW}⚠️  Note: This addon requires WSL2. You must install cloudflared in WSL2, not on Windows.${NC}"
-            echo -e "  ${BLUE}If you see this message, you're likely running from Windows instead of WSL2.${NC}"
-            echo ""
-            echo -e "${CYAN}Install cloudflared in WSL2 (run in WSL2 terminal):${NC}"
-            echo -e "  ${BLUE}curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH_TYPE}.deb -o cloudflared.deb${NC}"
-            echo -e "  ${BLUE}sudo dpkg -i cloudflared.deb${NC}"
-            ;;
-        *)
-            echo -e "${CYAN}Unknown OS - Manual Installation:${NC}"
-            echo -e "  Visit: ${BLUE}https://github.com/cloudflare/cloudflared/releases/latest${NC}"
-            ;;
-    esac
+    # Start the tunnel pointing to the DDEV site's host URL
+    # This command blocks until Ctrl+C is pressed.
+    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
+}
 
-    echo ""
-    echo -e "${YELLOW}📚 More info: ${BLUE}https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/${NC}"
+# Function to display site-specific fix instructions
+display_site_fixes() {
+    if [ -z "$TUNNEL_URL" ]; then
+        # If running the host binary, the URL isn't immediately available in a variable
+        # We can't display the custom instructions, so we just show generic ones.
+        echo ""
+        echo -e "${CYAN}ℹ️ Site-Specific Fixes (Check your URL in the output above):${NC}"
+        TUNNEL_PLACEHOLDER="https://your-tunnel-url.trycloudflare.com"
+    else
+        # If running Docker, the URL is set, so we use it for specific instructions
+        echo ""
+        echo -e "${CYAN}ℹ️ Site-Specific Fixes:${NC}"
+        TUNNEL_PLACEHOLDER="${TUNNEL_URL}"
+    fi
+
+    # Detect Drupal multisite setup
+    SITES_PHP_PATH=""
+    if [ -f "web/sites/sites.php" ]; then
+        SITES_PHP_PATH="web/sites/sites.php"
+    elif [ -f "docroot/sites/sites.php" ]; then
+        SITES_PHP_PATH="docroot/sites/sites.php"
+    fi
+
+    if [ -n "$SITES_PHP_PATH" ]; then
+        echo -e "${CYAN}  Drupal multisite detected.${NC}"
+        echo -e "    ${YELLOW}📝 Note: Add the tunnel URL to ${SITES_PHP_PATH}${NC}"
+        echo -e "    ${YELLOW}   Example: \$sites['${TUNNEL_PLACEHOLDER##*/}'] = 'subsite';${NC}"
+    fi
+
+    # Detect WordPress installation
+    if [ "$DDEV_PROJECT_TYPE" = "wordpress" ]; then
+        echo -e "${CYAN}  WordPress detected.${NC}"
+        echo -e "    ${YELLOW}⚠️  Note: WordPress redirects may use the local domain instead of tunnel URL${NC}"
+        echo -e "    ${YELLOW}   To fix, update URLs after tunnel starts (run in a separate terminal):${NC}"
+        echo -e "    ${BLUE}ddev wp option update home '${TUNNEL_PLACEHOLDER}'${NC}"
+        echo -e "    ${BLUE}ddev wp option update siteurl '${TUNNEL_PLACEHOLDER}'${NC}"
+    fi
+
+    # Detect Magento installation
+    if [ "$DDEV_PROJECT_TYPE" = "magento" ] || [ "$DDEV_PROJECT_TYPE" = "magento2" ]; then
+        echo -e "${CYAN}  Magento detected.${NC}"
+        echo -e "    ${YELLOW}⚠️  Note: Magento redirects may use the local domain instead of tunnel URL${NC}"
+        echo -e "    ${YELLOW}   To fix, update base URLs after tunnel starts (run in a separate terminal):${NC}"
+        echo -e "    ${BLUE}ddev exec bin/magento config:set web/unsecure/base_url '${TUNNEL_PLACEHOLDER}/'${NC}"
+        echo -e "    ${BLUE}ddev exec bin/magento config:set web/secure/base_url '${TUNNEL_PLACEHOLDER}/'${NC}"
+        echo -e "    ${BLUE}ddev exec bin/magento cache:flush${NC}"
+    fi
     echo ""
 }
 
-# Check if cloudflared is installed
-if ! command -v cloudflared &> /dev/null; then
-    detect_system
-    show_install_instructions
-    exit 1
-fi
+# --- Main Execution Flow ---
 
+# 0. Initial Project Check
 if [ -z "$DDEV_HOST_HTTP_PORT" ]; then
-    echo -e "${RED}❌ Could not determine DDEV local port URL${NC}"
-    echo -e "${YELLOW}Make sure you're in a DDEV project directory and the project is running${NC}"
+    echo -e "${RED}❌ DDEV project is not running.${NC}"
+    echo -e "${YELLOW}Please run ${BLUE}ddev start${YELLOW} first.${NC}"
     exit 1
 fi
 
-# Extract the first hostname for the Host header (needed for multisite support)
-DDEV_FIRST_HOSTNAME=$(echo "$DDEV_HOSTNAME" | cut -d',' -f1)
-
-echo -e "${GREEN}✅ cloudflared is installed${NC}"
-echo ""
-DDEV_LOCALHOST_URL="http://127.0.0.1:${DDEV_HOST_HTTP_PORT}"
-echo -e "${BLUE}🚀 Starting Cloudflare Tunnel...${NC}"
-echo -e "${YELLOW}⏳ Generating public URL (this may take a few seconds)...${NC}"
-echo ""
-echo -e "${CYAN}📍 Local site: ${DDEV_LOCALHOST_URL}${NC}"
-echo ""
-echo -e "${YELLOW}💡 Tip: Press Ctrl+C to stop the tunnel${NC}"
-
-# Detect Drupal multisite setup
-SITES_PHP_PATH=""
-MULTISITE_DETECTED=false
-if [ -f "web/sites/sites.php" ]; then
-    SITES_PHP_PATH="web/sites/sites.php"
-    MULTISITE_DETECTED=true
-elif [ -f "docroot/sites/sites.php" ]; then
-    SITES_PHP_PATH="docroot/sites/sites.php"
-    MULTISITE_DETECTED=true
-fi
-
-# Detect WordPress installation
-WORDPRESS_DETECTED=false
-if [ "$DDEV_PROJECT_TYPE" = "wordpress" ]; then
-    WORDPRESS_DETECTED=true
-fi
-
-# Detect Magento installation
-MAGENTO_DETECTED=false
-if [ "$DDEV_PROJECT_TYPE" = "magento" ] || [ "$DDEV_PROJECT_TYPE" = "magento2" ]; then
-    MAGENTO_DETECTED=true
-fi
-
-if [ "$MULTISITE_DETECTED" = true ]; then
-    echo -e "${CYAN}ℹ️  Drupal multisite detected${NC}"
-    echo -e "${YELLOW}📝 Note: Add the tunnel URL to ${SITES_PHP_PATH}${NC}"
-    echo -e "${YELLOW}   Example: \$sites['tunnel-url.trycloudflare.com'] = 'subsite';${NC}"
-fi
-
-if [ "$WORDPRESS_DETECTED" = true ]; then
-    echo -e "${CYAN}ℹ️  WordPress detected${NC}"
-    echo -e "${YELLOW}⚠️  Note: WordPress redirects may use the local domain instead of tunnel URL${NC}"
-    echo -e "${YELLOW}   To fix, update URLs after tunnel starts:${NC}"
-    echo -e "${YELLOW}   ddev wp option update home 'https://your-tunnel-url.trycloudflare.com'${NC}"
-    echo -e "${YELLOW}   ddev wp option update siteurl 'https://your-tunnel-url.trycloudflare.com'${NC}"
-fi
-
-if [ "$MAGENTO_DETECTED" = true ]; then
-    echo -e "${CYAN}ℹ️  Magento detected${NC}"
-    echo -e "${YELLOW}⚠️  Note: Magento redirects may use the local domain instead of tunnel URL${NC}"
-    echo -e "${YELLOW}   To fix, update base URLs after tunnel starts:${NC}"
-    echo -e "${YELLOW}   ddev exec bin/magento config:set web/unsecure/base_url 'https://your-tunnel-url.trycloudflare.com/'${NC}"
-    echo -e "${YELLOW}   ddev exec bin/magento config:set web/secure/base_url 'https://your-tunnel-url.trycloudflare.com/'${NC}"
-    echo -e "${YELLOW}   ddev exec bin/magento cache:flush${NC}"
-fi
-
-echo ""
-
-# Start the tunnel pointing to the DDEV site
-# cloudflared passes the tunnel URL as the Host header by default, which works for both
-# multisite (matched in sites.php) and regular sites (trusted via X-Forwarded-Host)
-if [ "$MULTISITE_DETECTED" = true ]; then
-    echo -e "${CYAN}💡 Multisite mode: Host header will be the tunnel URL${NC}"
-    echo ""
-    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
+# 1. PRIORITY: Check for host binary
+if command -v cloudflared &> /dev/null; then
+    # Binary found: Execute host tunnel
+    # Display fixes BEFORE starting the tunnel since the tunnel command blocks
+    display_site_fixes
+    run_host_tunnel
 else
-    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
+    # Binary not found: Execute Docker fallback
+    run_docker_tunnel
+    # Display fixes AFTER the docker run because the URL is now known in $TUNNEL_URL
+    display_site_fixes
+fi
+
+# The script only reaches this point if the host tunnel (run_host_tunnel) was used and then stopped (Ctrl+C).
+if command -v cloudflared &> /dev/null; then
+    echo -e "${YELLOW}Cloudflare Tunnel stopped.${NC}"
 fi
