@@ -16,7 +16,8 @@ This DDEV addon provides a simple command to share your local DDEV sites publicl
 - 🆓 **Completely free** - No rate limits, no paid plans needed
 - 🔒 **Secure** - No need to open ports on your firewall
 - ⚡ **Fast** - Powered by Cloudflare's global network
-- 🎯 **Zero configuration** - No account or API tokens required
+- 🎯 **Zero configuration** - No account or API tokens required for quick tunnels
+- 🔗 **Stable URLs** - Optional named tunnels for persistent custom-domain URLs
 - 💻 **Cross-platform** - Works on macOS, Linux, and Windows/WSL2
 
 ## Requirements
@@ -106,7 +107,70 @@ The tunnel URL changes each time you run the command (similar to `ddev share`).
 | **Speed** | Good | Excellent (Cloudflare CDN) |
 | **Account required** | Yes | No |
 | **Setup** | Configure token | Zero config |
-| **URL persistence** | Changes each time | Changes each time |
+| **URL persistence** | Changes each time | Changes each time (or stable with named tunnels) |
+
+## Named Tunnels (Stable URLs)
+
+By default, `ddev share-cf` creates a temporary quick tunnel with a random URL that changes each time. If you need a **stable, persistent URL** on your own domain, you can use **named tunnels**.
+
+### Requirements for named tunnels
+
+- A free [Cloudflare account](https://dash.cloudflare.com/sign-up)
+- A domain with its nameservers pointed to Cloudflare
+
+### Setup (one-time)
+
+#### 1. Authenticate with Cloudflare
+
+```bash
+ddev share-cf --login
+```
+
+This opens your browser to authorize `cloudflared` with your Cloudflare account. A certificate is saved to `~/.cloudflared/cert.pem`.
+
+#### 2. Create a tunnel and DNS route
+
+```bash
+ddev share-cf --create-tunnel my-project --hostname dev.example.com
+```
+
+This creates a named tunnel and adds a CNAME record on your Cloudflare domain pointing to the tunnel. DNS propagation may take a few minutes.
+
+You can also create the tunnel without a hostname and add DNS later:
+
+```bash
+ddev share-cf --create-tunnel my-project
+```
+
+### Daily usage
+
+Once set up, start the tunnel with:
+
+```bash
+ddev share-cf --tunnel my-project
+```
+
+Your site will be available at `https://dev.example.com` (or whatever hostname you configured) every time.
+
+### Cleanup
+
+To delete a named tunnel:
+
+```bash
+ddev share-cf --delete-tunnel my-project
+```
+
+> **Note:** This deletes the tunnel from Cloudflare but does not remove the DNS record. You can remove CNAME records from the [Cloudflare dashboard](https://dash.cloudflare.com/).
+
+### Named tunnels vs quick tunnels
+
+| | Quick tunnel | Named tunnel |
+|---|---|---|
+| **URL** | Random `*.trycloudflare.com` | Your own domain |
+| **Persistence** | Changes each time | Stable across sessions |
+| **Account** | Not required | Cloudflare account + domain |
+| **Setup** | None | One-time login + create |
+| **Best for** | Quick demos, testing | Webhooks, client previews, CI |
 
 ## Use Cases
 
