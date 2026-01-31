@@ -183,28 +183,26 @@ $sites['random-name.trycloudflare.com'] = 'stage';  // Replace 'stage' with your
 
 ### WordPress URL Redirects
 
-The addon **automatically detects** WordPress installations. WordPress stores site URLs in the database, which can cause redirects (like after login) to redirect back to your local domain instead of staying on the tunnel URL.
+The addon **automatically detects** WordPress installations. WordPress stores absolute URLs throughout the database (options, post content, meta fields, serialized data, etc.), which causes redirects, broken media, and broken links when accessing the site through a tunnel URL.
 
-When WordPress is detected, the addon will display instructions. To fix redirects:
+When WordPress is detected, the addon will display instructions. To fix this, use `wp search-replace` to replace URLs across all tables (including serialized data):
 
 1. Run `ddev share-cf` and note the generated URL (e.g., `https://random-name.trycloudflare.com`)
-2. Update WordPress URLs using WP-CLI:
+2. Replace all URLs in the database:
 
 ```bash
-# Update to tunnel URL
-ddev wp option update home 'https://random-name.trycloudflare.com'
-ddev wp option update siteurl 'https://random-name.trycloudflare.com'
+# Replace local URL with tunnel URL (handles serialized data correctly)
+ddev wp search-replace 'https://yoursite.ddev.site' 'https://random-name.trycloudflare.com' --all-tables
 ```
 
 3. When done, revert back to local URLs:
 
 ```bash
 # Revert to local domain
-ddev wp option update home 'https://yoursite.ddev.site'
-ddev wp option update siteurl 'https://yoursite.ddev.site'
+ddev wp search-replace 'https://random-name.trycloudflare.com' 'https://yoursite.ddev.site' --all-tables
 ```
 
-**Note:** The tunnel URL changes each time you run the command, so you'll need to update the URLs for each session. Alternatively, consider using the [Relative URL](https://wordpress.org/plugins/relative-url/) plugin for easier multi-domain support.
+**Note:** The tunnel URL changes each time you run the command, so you'll need to repeat this for each session.
 
 ### Magento Base URL Redirects
 
