@@ -176,10 +176,9 @@ fi
 
 if [ "$WORDPRESS_DETECTED" = true ]; then
     echo -e "${CYAN}ℹ️  WordPress detected${NC}"
-    echo -e "${YELLOW}⚠️  Note: WordPress redirects may use the local domain instead of tunnel URL${NC}"
-    echo -e "${YELLOW}   To fix, update URLs after tunnel starts:${NC}"
-    echo -e "${YELLOW}   ddev wp option update home 'https://your-tunnel-url.trycloudflare.com'${NC}"
-    echo -e "${YELLOW}   ddev wp option update siteurl 'https://your-tunnel-url.trycloudflare.com'${NC}"
+    echo -e "${YELLOW}⚠️  Note: WordPress stores absolute URLs in the database. To fix, replace them after tunnel starts:${NC}"
+    echo -e "${YELLOW}   ddev wp search-replace 'https://${DDEV_FIRST_HOSTNAME}' 'https://your-tunnel-url.trycloudflare.com' --all-tables${NC}"
+    echo -e "${YELLOW}   To revert: ddev wp search-replace 'https://your-tunnel-url.trycloudflare.com' 'https://${DDEV_FIRST_HOSTNAME}' --all-tables${NC}"
 fi
 
 if [ "$MAGENTO_DETECTED" = true ]; then
