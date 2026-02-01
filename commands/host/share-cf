@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 ## Description: Share your DDEV site publicly via Cloudflare Tunnel
-## Usage: share-cf
-## Example: "ddev share-cf"
+## Usage: share-cf [flags]
+## Example: "ddev share-cf" or "ddev share-cf --tunnel my-project"
 
 #ddev-generated
 
@@ -119,6 +119,74 @@ show_install_instructions() {
     echo ""
 }
 
+# --- Argument parsing ---
+TUNNEL_NAME=""
+CREATE_TUNNEL_NAME=""
+DELETE_TUNNEL_NAME=""
+HOSTNAME=""
+LOGIN=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --tunnel|-t)
+            if [[ -z "${2:-}" || "$2" == --* ]]; then
+                echo -e "${RED}❌ --tunnel requires a tunnel name${NC}"
+                exit 1
+            fi
+            TUNNEL_NAME="$2"
+            shift 2
+            ;;
+        --login)
+            LOGIN=true
+            shift
+            ;;
+        --create-tunnel)
+            if [[ -z "${2:-}" || "$2" == --* ]]; then
+                echo -e "${RED}❌ --create-tunnel requires a tunnel name${NC}"
+                exit 1
+            fi
+            CREATE_TUNNEL_NAME="$2"
+            shift 2
+            ;;
+        --hostname)
+            if [[ -z "${2:-}" || "$2" == --* ]]; then
+                echo -e "${RED}❌ --hostname requires a hostname${NC}"
+                exit 1
+            fi
+            HOSTNAME="$2"
+            shift 2
+            ;;
+        --delete-tunnel)
+            if [[ -z "${2:-}" || "$2" == --* ]]; then
+                echo -e "${RED}❌ --delete-tunnel requires a tunnel name${NC}"
+                exit 1
+            fi
+            DELETE_TUNNEL_NAME="$2"
+            shift 2
+            ;;
+        *)
+            echo -e "${RED}❌ Unknown option: $1${NC}"
+            echo ""
+            echo "Usage: ddev share-cf [flags]"
+            echo ""
+            echo "Flags:"
+            echo "  --tunnel, -t <name>         Use a named tunnel"
+            echo "  --login                     Authenticate with Cloudflare"
+            echo "  --create-tunnel <name>      Create a new named tunnel"
+            echo "  --hostname <host>           Hostname for DNS routing (used with --create-tunnel)"
+            echo "  --delete-tunnel <name>      Delete a named tunnel"
+            exit 1
+            ;;
+    esac
+done
+
+# --- Validate flag combinations ---
+if [ -n "$HOSTNAME" ] && [ -z "$CREATE_TUNNEL_NAME" ]; then
+    echo -e "${RED}❌ --hostname can only be used with --create-tunnel${NC}"
+    echo -e "${YELLOW}   Example: ddev share-cf --create-tunnel my-project --hostname dev.example.com${NC}"
+    exit 1
+fi
+
 # Check if cloudflared is installed
 if ! command -v cloudflared &> /dev/null; then
     detect_system
@@ -126,24 +194,82 @@ if ! command -v cloudflared &> /dev/null; then
     exit 1
 fi
 
+# --- Handler: --login ---
+if [ "$LOGIN" = true ]; then
+    CERT_PATH="${HOME}/.cloudflared/cert.pem"
+    if [ -f "$CERT_PATH" ]; then
+        echo -e "${YELLOW}⚠️  You are already authenticated with Cloudflare${NC}"
+        echo -e "${CYAN}   Certificate found at: ${CERT_PATH}${NC}"
+        echo -e "${YELLOW}   To re-authenticate, delete the certificate and run this command again:${NC}"
+        echo -e "${BLUE}   rm ${CERT_PATH}${NC}"
+        echo ""
+    fi
+    echo -e "${BLUE}🔑 Opening browser for Cloudflare authentication...${NC}"
+    cloudflared tunnel login
+    echo ""
+    echo -e "${GREEN}✅ Authentication successful!${NC}"
+    echo -e "${CYAN}   You can now create named tunnels with: ddev share-cf --create-tunnel <name> --hostname <host>${NC}"
+    exit 0
+fi
+
+# --- Handler: --create-tunnel ---
+if [ -n "$CREATE_TUNNEL_NAME" ]; then
+    CERT_PATH="${HOME}/.cloudflared/cert.pem"
+    if [ ! -f "$CERT_PATH" ]; then
+        echo -e "${RED}❌ Not authenticated with Cloudflare${NC}"
+        echo -e "${YELLOW}   Run 'ddev share-cf --login' first to authenticate${NC}"
+        exit 1
+    fi
+
+    echo -e "${BLUE}🔧 Creating tunnel '${CREATE_TUNNEL_NAME}'...${NC}"
+    cloudflared tunnel create "$CREATE_TUNNEL_NAME"
+    echo ""
+    echo -e "${GREEN}✅ Tunnel '${CREATE_TUNNEL_NAME}' created successfully${NC}"
+
+    if [ -n "$HOSTNAME" ]; then
+        echo ""
+        echo -e "${BLUE}🌐 Routing DNS for ${HOSTNAME} to tunnel '${CREATE_TUNNEL_NAME}'...${NC}"
+        cloudflared tunnel route dns "$CREATE_TUNNEL_NAME" "$HOSTNAME"
+        echo ""
+        echo -e "${GREEN}✅ DNS route created: ${HOSTNAME} → tunnel '${CREATE_TUNNEL_NAME}'${NC}"
+        echo ""
+        echo -e "${CYAN}📋 Summary:${NC}"
+        echo -e "${CYAN}   Tunnel name: ${CREATE_TUNNEL_NAME}${NC}"
+        echo -e "${CYAN}   Hostname:    ${HOSTNAME}${NC}"
+        echo -e "${CYAN}   Stable URL:  https://${HOSTNAME}${NC}"
+        echo ""
+        echo -e "${YELLOW}💡 Note: DNS propagation may take a few minutes${NC}"
+    else
+        echo ""
+        echo -e "${YELLOW}💡 Tip: Add a DNS route with:${NC}"
+        echo -e "${BLUE}   ddev share-cf --create-tunnel ${CREATE_TUNNEL_NAME} --hostname dev.example.com${NC}"
+    fi
+
+    echo ""
+    echo -e "${CYAN}🚀 Start the tunnel with:${NC}"
+    echo -e "${BLUE}   ddev share-cf --tunnel ${CREATE_TUNNEL_NAME}${NC}"
+    exit 0
+fi
+
+# --- Handler: --delete-tunnel ---
+if [ -n "$DELETE_TUNNEL_NAME" ]; then
+    echo -e "${BLUE}🗑️  Deleting tunnel '${DELETE_TUNNEL_NAME}'...${NC}"
+    cloudflared tunnel delete "$DELETE_TUNNEL_NAME"
+    echo ""
+    echo -e "${GREEN}✅ Tunnel '${DELETE_TUNNEL_NAME}' deleted${NC}"
+    exit 0
+fi
+
+# --- From here on, we need a running DDEV project ---
 if [ -z "$DDEV_HOST_HTTP_PORT" ]; then
     echo -e "${RED}❌ Could not determine DDEV local port URL${NC}"
     echo -e "${YELLOW}Make sure you're in a DDEV project directory and the project is running${NC}"
     exit 1
 fi
 
-# Extract the first hostname for the Host header (needed for multisite support)
-DDEV_FIRST_HOSTNAME=$(echo "$DDEV_HOSTNAME" | cut -d',' -f1)
-
 echo -e "${GREEN}✅ cloudflared is installed${NC}"
 echo ""
 DDEV_LOCALHOST_URL="http://127.0.0.1:${DDEV_HOST_HTTP_PORT}"
-echo -e "${BLUE}🚀 Starting Cloudflare Tunnel...${NC}"
-echo -e "${YELLOW}⏳ Generating public URL (this may take a few seconds)...${NC}"
-echo ""
-echo -e "${CYAN}📍 Local site: ${DDEV_LOCALHOST_URL}${NC}"
-echo ""
-echo -e "${YELLOW}💡 Tip: Press Ctrl+C to stop the tunnel${NC}"
 
 # Detect Drupal multisite setup
 SITES_PHP_PATH=""
@@ -167,6 +293,61 @@ MAGENTO_DETECTED=false
 if [ "$DDEV_PROJECT_TYPE" = "magento" ] || [ "$DDEV_PROJECT_TYPE" = "magento2" ]; then
     MAGENTO_DETECTED=true
 fi
+
+# --- Handler: --tunnel (named tunnel) ---
+if [ -n "$TUNNEL_NAME" ]; then
+    echo -e "${BLUE}🚀 Starting named tunnel '${TUNNEL_NAME}'...${NC}"
+    echo ""
+    echo -e "${CYAN}📍 Local site: ${DDEV_LOCALHOST_URL}${NC}"
+    echo ""
+
+    # Verify tunnel exists
+    TUNNEL_LIST_OUTPUT=$(cloudflared tunnel list 2>&1) || {
+        echo -e "${RED}❌ Failed to list tunnels. Are you authenticated?${NC}"
+        echo -e "${YELLOW}   Run 'ddev share-cf --login' first${NC}"
+        exit 1
+    }
+    if ! echo "$TUNNEL_LIST_OUTPUT" | grep -qF "$TUNNEL_NAME"; then
+        echo -e "${RED}❌ Tunnel '${TUNNEL_NAME}' not found${NC}"
+        echo -e "${YELLOW}   Create it first with: ddev share-cf --create-tunnel ${TUNNEL_NAME} --hostname dev.example.com${NC}"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}💡 Tip: Press Ctrl+C to stop the tunnel${NC}"
+
+    if [ "$MULTISITE_DETECTED" = true ]; then
+        echo -e "${CYAN}ℹ️  Drupal multisite detected${NC}"
+        echo -e "${YELLOW}📝 Note: Add the tunnel hostname to ${SITES_PHP_PATH}${NC}"
+    fi
+
+    if [ "$WORDPRESS_DETECTED" = true ]; then
+        echo -e "${CYAN}ℹ️  WordPress detected${NC}"
+        echo -e "${YELLOW}⚠️  Note: With a named tunnel you can set the URL once and reuse it${NC}"
+        echo -e "${YELLOW}   ddev wp option update home 'https://your-tunnel-hostname'${NC}"
+        echo -e "${YELLOW}   ddev wp option update siteurl 'https://your-tunnel-hostname'${NC}"
+    fi
+
+    if [ "$MAGENTO_DETECTED" = true ]; then
+        echo -e "${CYAN}ℹ️  Magento detected${NC}"
+        echo -e "${YELLOW}⚠️  Note: With a named tunnel you can set the URL once and reuse it${NC}"
+        echo -e "${YELLOW}   ddev exec bin/magento config:set web/unsecure/base_url 'https://your-tunnel-hostname/'${NC}"
+        echo -e "${YELLOW}   ddev exec bin/magento config:set web/secure/base_url 'https://your-tunnel-hostname/'${NC}"
+        echo -e "${YELLOW}   ddev exec bin/magento cache:flush${NC}"
+    fi
+
+    echo ""
+
+    cloudflared tunnel run --url "${DDEV_LOCALHOST_URL}" "$TUNNEL_NAME"
+    exit 0
+fi
+
+# --- Default: quick tunnel (existing behavior) ---
+echo -e "${BLUE}🚀 Starting Cloudflare Tunnel...${NC}"
+echo -e "${YELLOW}⏳ Generating public URL (this may take a few seconds)...${NC}"
+echo ""
+echo -e "${CYAN}📍 Local site: ${DDEV_LOCALHOST_URL}${NC}"
+echo ""
+echo -e "${YELLOW}💡 Tip: Press Ctrl+C to stop the tunnel${NC}"
 
 if [ "$MULTISITE_DETECTED" = true ]; then
     echo -e "${CYAN}ℹ️  Drupal multisite detected${NC}"
@@ -198,7 +379,6 @@ echo ""
 if [ "$MULTISITE_DETECTED" = true ]; then
     echo -e "${CYAN}💡 Multisite mode: Host header will be the tunnel URL${NC}"
     echo ""
-    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
-else
-    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
 fi
+
+cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"

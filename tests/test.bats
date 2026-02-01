@@ -80,3 +80,99 @@ teardown() {
         skip "cloudflared is not installed on this system"
     fi
 }
+
+@test "share-cf --tunnel without name shows error" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    run ddev share-cf --tunnel
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "--tunnel requires a tunnel name" ]]
+}
+
+@test "share-cf --create-tunnel without name shows error" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    run ddev share-cf --create-tunnel
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "--create-tunnel requires a tunnel name" ]]
+}
+
+@test "share-cf --hostname without value shows error" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    run ddev share-cf --hostname
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "--hostname requires a hostname" ]]
+}
+
+@test "share-cf --delete-tunnel without name shows error" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    run ddev share-cf --delete-tunnel
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "--delete-tunnel requires a tunnel name" ]]
+}
+
+@test "share-cf unknown flag shows error" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    run ddev share-cf --invalid-flag
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Unknown option" ]]
+}
+
+@test "share-cf --hostname without --create-tunnel shows error" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    run ddev share-cf --hostname dev.example.com
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "--hostname can only be used with --create-tunnel" ]]
+}
+
+@test "share-cf --create-tunnel without login shows error" {
+    set -eu -o pipefail
+
+    if ! command -v cloudflared &> /dev/null; then
+        skip "cloudflared is not installed on this system"
+    fi
+
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    # Only run if cert.pem does NOT exist (user is not logged in)
+    if [ ! -f "${HOME}/.cloudflared/cert.pem" ]; then
+        echo "# Testing --create-tunnel without authentication" >&3
+        run ddev share-cf --create-tunnel test-tunnel
+        [ "$status" -eq 1 ]
+        [[ "$output" =~ "Not authenticated with Cloudflare" ]]
+    else
+        echo "# User is already authenticated, skipping" >&3
+        skip "User is already authenticated with Cloudflare"
+    fi
+}
