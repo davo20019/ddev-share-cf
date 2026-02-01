@@ -116,7 +116,9 @@ By default, `ddev share-cf` creates a temporary quick tunnel with a random URL t
 ### Requirements for named tunnels
 
 - A free [Cloudflare account](https://dash.cloudflare.com/sign-up)
-- A domain with its nameservers pointed to Cloudflare
+- **A domain with its nameservers pointed to Cloudflare** — This is required because the `cloudflared tunnel login` command asks you to select a zone (domain) from your account. If you don't have any domains in Cloudflare, you won't be able to complete the authentication step and cannot use named tunnels. You can [add a domain to Cloudflare for free](https://developers.cloudflare.com/fundamentals/setup/manage-domains/add-site/).
+
+> **Don't have a domain in Cloudflare?** No problem — quick tunnels (`ddev share-cf` with no flags) work without any account or domain. Named tunnels are only needed if you want a stable URL on your own domain.
 
 ### Setup (one-time)
 
