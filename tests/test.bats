@@ -155,6 +155,11 @@ teardown() {
 
 @test "share-cf --create-tunnel without login shows error" {
     set -eu -o pipefail
+
+    if ! command -v cloudflared &> /dev/null; then
+        skip "cloudflared is not installed on this system"
+    fi
+
     cd ${TESTDIR}
     ddev config --project-name=ddev-share-cf
     ddev start -y

@@ -119,13 +119,6 @@ show_install_instructions() {
     echo ""
 }
 
-# Check if cloudflared is installed
-if ! command -v cloudflared &> /dev/null; then
-    detect_system
-    show_install_instructions
-    exit 1
-fi
-
 # --- Argument parsing ---
 TUNNEL_NAME=""
 CREATE_TUNNEL_NAME=""
@@ -191,6 +184,13 @@ done
 if [ -n "$HOSTNAME" ] && [ -z "$CREATE_TUNNEL_NAME" ]; then
     echo -e "${RED}❌ --hostname can only be used with --create-tunnel${NC}"
     echo -e "${YELLOW}   Example: ddev share-cf --create-tunnel my-project --hostname dev.example.com${NC}"
+    exit 1
+fi
+
+# Check if cloudflared is installed
+if ! command -v cloudflared &> /dev/null; then
+    detect_system
+    show_install_instructions
     exit 1
 fi
 
