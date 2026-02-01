@@ -3,7 +3,6 @@
 ## Description: Share your DDEV site publicly via Cloudflare Tunnel
 ## Usage: share-cf [flags]
 ## Example: "ddev share-cf" or "ddev share-cf --tunnel my-project"
-## Flags: [{"Name":"tunnel","Shorthand":"t","Usage":"Use a named tunnel instead of a quick tunnel"},{"Name":"login","Usage":"Authenticate with Cloudflare for named tunnels"},{"Name":"create-tunnel","Usage":"Create a new named tunnel"},{"Name":"hostname","Usage":"Hostname for DNS routing (used with --create-tunnel)"},{"Name":"delete-tunnel","Usage":"Delete an existing named tunnel"}]
 
 #ddev-generated
 
