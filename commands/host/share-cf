@@ -119,6 +119,30 @@ show_install_instructions() {
     echo ""
 }
 
+# Check if Docker is available and running
+check_docker_available() {
+    if command -v docker &> /dev/null && docker info &> /dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+# Determine execution mode: "host", "docker", or "none"
+determine_execution_mode() {
+    if command -v cloudflared &> /dev/null; then
+        echo "host"
+        return 0
+    fi
+
+    if check_docker_available && [ -n "$DDEV_SITENAME" ]; then
+        echo "docker"
+        return 0
+    fi
+
+    echo "none"
+    return 1
+}
+
 # --- Argument parsing ---
 TUNNEL_NAME=""
 CREATE_TUNNEL_NAME=""
@@ -187,12 +211,103 @@ if [ -n "$HOSTNAME" ] && [ -z "$CREATE_TUNNEL_NAME" ]; then
     exit 1
 fi
 
-# Check if cloudflared is installed
-if ! command -v cloudflared &> /dev/null; then
+# Determine execution mode (host or docker)
+EXECUTION_MODE=$(determine_execution_mode)
+
+if [ "$EXECUTION_MODE" = "none" ]; then
     detect_system
     show_install_instructions
+    echo ""
+    echo -e "${CYAN}💡 Alternative: Docker mode (automatic fallback)${NC}"
+    echo -e "${YELLOW}   If you have Docker running, this addon can use cloudflared in a container.${NC}"
     exit 1
 fi
+
+if [ "$EXECUTION_MODE" = "docker" ]; then
+    echo -e "${CYAN}ℹ️  Using Docker mode (cloudflared not found on host)${NC}"
+    echo ""
+fi
+
+# Execute cloudflared command in Docker (one-off commands)
+execute_cloudflared_docker() {
+    # Check if credentials directory exists for commands that need it
+    local needs_creds=false
+    if [[ "$*" =~ (login|create|delete|list|route) ]]; then
+        needs_creds=true
+    fi
+
+    # Build volume mount argument
+    local volume_args=""
+    if [ "$needs_creds" = true ] || [ -d "${HOME}/.cloudflared" ]; then
+        # Mount credentials if they exist or if command needs them
+        volume_args="-v ${HOME}/.cloudflared:/root/.cloudflared"
+    fi
+
+    docker run --rm \
+        --network ddev_default \
+        $volume_args \
+        cloudflare/cloudflared:latest \
+        "$@"
+}
+
+# Start tunnel in Docker (long-running)
+start_tunnel_docker() {
+    local url="$1"
+    local tunnel_name="${2:-}"
+
+    # Stop any existing container
+    docker stop ddev-${DDEV_SITENAME}-cloudflared 2>/dev/null || true
+    docker rm ddev-${DDEV_SITENAME}-cloudflared 2>/dev/null || true
+
+    # Build volume mount args
+    local volume_args=""
+    if [ -n "$tunnel_name" ]; then
+        # Named tunnels require credentials
+        if [ ! -f "${HOME}/.cloudflared/cert.pem" ]; then
+            echo -e "${RED}❌ Not authenticated with Cloudflare${NC}"
+            echo -e "${YELLOW}   Run 'ddev share-cf --login' first${NC}"
+            exit 1
+        fi
+        volume_args="-v ${HOME}/.cloudflared:/root/.cloudflared:ro"
+    fi
+    # Quick tunnels don't need credentials - no volume mount needed
+
+    # Start new container
+    if [ -n "$tunnel_name" ]; then
+        docker run -d \
+            --name ddev-${DDEV_SITENAME}-cloudflared \
+            --network ddev_default \
+            $volume_args \
+            cloudflare/cloudflared:latest \
+            tunnel run --url "$url" "$tunnel_name"
+    else
+        docker run -d \
+            --name ddev-${DDEV_SITENAME}-cloudflared \
+            --network ddev_default \
+            cloudflare/cloudflared:latest \
+            tunnel --url "$url"
+    fi
+
+    # Follow logs
+    docker logs -f ddev-${DDEV_SITENAME}-cloudflared 2>&1
+}
+
+# Cleanup trap for Docker mode
+cleanup_docker_tunnel() {
+    echo ""
+    echo -e "${YELLOW}Stopping tunnel...${NC}"
+    docker stop ddev-${DDEV_SITENAME}-cloudflared 2>/dev/null || true
+    docker rm ddev-${DDEV_SITENAME}-cloudflared 2>/dev/null || true
+}
+
+# Unified wrapper - routes to host or Docker
+execute_cloudflared() {
+    if [ "$EXECUTION_MODE" = "docker" ]; then
+        execute_cloudflared_docker "$@"
+    else
+        cloudflared "$@"
+    fi
+}
 
 # --- Handler: --login ---
 if [ "$LOGIN" = true ]; then
@@ -205,7 +320,7 @@ if [ "$LOGIN" = true ]; then
         echo ""
     fi
     echo -e "${BLUE}🔑 Opening browser for Cloudflare authentication...${NC}"
-    cloudflared tunnel login
+    execute_cloudflared tunnel login
     echo ""
     echo -e "${GREEN}✅ Authentication successful!${NC}"
     echo -e "${CYAN}   You can now create named tunnels with: ddev share-cf --create-tunnel <name> --hostname <host>${NC}"
@@ -222,14 +337,14 @@ if [ -n "$CREATE_TUNNEL_NAME" ]; then
     fi
 
     echo -e "${BLUE}🔧 Creating tunnel '${CREATE_TUNNEL_NAME}'...${NC}"
-    cloudflared tunnel create "$CREATE_TUNNEL_NAME"
+    execute_cloudflared tunnel create "$CREATE_TUNNEL_NAME"
     echo ""
     echo -e "${GREEN}✅ Tunnel '${CREATE_TUNNEL_NAME}' created successfully${NC}"
 
     if [ -n "$HOSTNAME" ]; then
         echo ""
         echo -e "${BLUE}🌐 Routing DNS for ${HOSTNAME} to tunnel '${CREATE_TUNNEL_NAME}'...${NC}"
-        cloudflared tunnel route dns "$CREATE_TUNNEL_NAME" "$HOSTNAME"
+        execute_cloudflared tunnel route dns "$CREATE_TUNNEL_NAME" "$HOSTNAME"
         echo ""
         echo -e "${GREEN}✅ DNS route created: ${HOSTNAME} → tunnel '${CREATE_TUNNEL_NAME}'${NC}"
         echo ""
@@ -254,7 +369,7 @@ fi
 # --- Handler: --delete-tunnel ---
 if [ -n "$DELETE_TUNNEL_NAME" ]; then
     echo -e "${BLUE}🗑️  Deleting tunnel '${DELETE_TUNNEL_NAME}'...${NC}"
-    cloudflared tunnel delete "$DELETE_TUNNEL_NAME"
+    execute_cloudflared tunnel delete "$DELETE_TUNNEL_NAME"
     echo ""
     echo -e "${GREEN}✅ Tunnel '${DELETE_TUNNEL_NAME}' deleted${NC}"
     exit 0
@@ -267,9 +382,29 @@ if [ -z "$DDEV_HOST_HTTP_PORT" ]; then
     exit 1
 fi
 
+# Docker-specific validations
+if [ "$EXECUTION_MODE" = "docker" ]; then
+    # Check if DDEV network exists
+    if ! docker network inspect ddev_default &>/dev/null; then
+        echo -e "${RED}❌ DDEV network not found${NC}"
+        echo -e "${YELLOW}   Make sure DDEV is running: ddev start${NC}"
+        exit 1
+    fi
+fi
+
 echo -e "${GREEN}✅ cloudflared is installed${NC}"
 echo ""
-DDEV_LOCALHOST_URL="http://127.0.0.1:${DDEV_HOST_HTTP_PORT}"
+
+# Set DDEV_LOCALHOST_URL based on execution mode
+if [ "$EXECUTION_MODE" = "docker" ]; then
+    # In Docker mode, connect to web container via internal networking
+    # Always use HTTP to avoid certificate verification issues with DDEV's self-signed certs
+    # The tunnel itself provides HTTPS to the outside world
+    DDEV_LOCALHOST_URL="http://web:80"
+else
+    # Host mode: connect via localhost on the mapped host port
+    DDEV_LOCALHOST_URL="http://127.0.0.1:${DDEV_HOST_HTTP_PORT}"
+fi
 
 # Detect Drupal multisite setup
 SITES_PHP_PATH=""
@@ -302,7 +437,7 @@ if [ -n "$TUNNEL_NAME" ]; then
     echo ""
 
     # Verify tunnel exists
-    TUNNEL_LIST_OUTPUT=$(cloudflared tunnel list 2>&1) || {
+    TUNNEL_LIST_OUTPUT=$(execute_cloudflared tunnel list 2>&1) || {
         echo -e "${RED}❌ Failed to list tunnels. Are you authenticated?${NC}"
         echo -e "${YELLOW}   Run 'ddev share-cf --login' first${NC}"
         exit 1
@@ -337,7 +472,12 @@ if [ -n "$TUNNEL_NAME" ]; then
 
     echo ""
 
-    cloudflared tunnel run --url "${DDEV_LOCALHOST_URL}" "$TUNNEL_NAME"
+    if [ "$EXECUTION_MODE" = "docker" ]; then
+        trap cleanup_docker_tunnel INT TERM
+        start_tunnel_docker "${DDEV_LOCALHOST_URL}" "$TUNNEL_NAME"
+    else
+        cloudflared tunnel run --url "${DDEV_LOCALHOST_URL}" "$TUNNEL_NAME"
+    fi
     exit 0
 fi
 
@@ -381,4 +521,9 @@ if [ "$MULTISITE_DETECTED" = true ]; then
     echo ""
 fi
 
-cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
+if [ "$EXECUTION_MODE" = "docker" ]; then
+    trap cleanup_docker_tunnel INT TERM
+    start_tunnel_docker "${DDEV_LOCALHOST_URL}"
+else
+    cloudflared tunnel --url "${DDEV_LOCALHOST_URL}"
+fi

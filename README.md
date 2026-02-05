@@ -23,16 +23,26 @@ This DDEV addon provides a simple command to share your local DDEV sites publicl
 ## Requirements
 
 - DDEV v1.21.0 or higher
-- `cloudflared` binary installed on your host machine
+- `cloudflared` binary installed on your host machine **OR** Docker (automatic fallback)
 - macOS, Linux, or Windows with WSL2
+
+**cloudflared is optional!** If you don't have `cloudflared` installed, the addon automatically uses Docker mode with the official Cloudflare Docker image. Both modes work identically.
 
 **Important for Windows users:** This addon requires WSL2. You must install and run DDEV in WSL2, not natively on Windows. See the [WSL2 section](#windows-with-wsl2) below for details.
 
 ## Installation
 
-### 1. Install cloudflared
+### 1. Install the DDEV addon
 
-First, install `cloudflared` on your host machine:
+```bash
+ddev add-on get davo20019/ddev-share-cf
+```
+
+That's it! The addon works out of the box with Docker mode (no cloudflared needed).
+
+### 2. (Optional) Install cloudflared for host mode
+
+If you prefer to use cloudflared directly on your host machine instead of Docker mode, install `cloudflared`:
 
 **macOS (Homebrew):**
 ```bash
@@ -67,12 +77,6 @@ sudo dpkg -i cloudflared.deb
 
 For other installation methods, see the [Cloudflare documentation](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
 
-### 2. Install the DDEV addon
-
-```bash
-ddev add-on get davo20019/ddev-share-cf
-```
-
 ## Usage
 
 From your DDEV project directory, simply run:
@@ -82,22 +86,75 @@ ddev share-cf
 ```
 
 This will:
-1. Check if `cloudflared` is installed (shows installation instructions if not)
+1. Automatically detect if `cloudflared` is installed or use Docker mode
 2. Start a Cloudflare Tunnel
 3. Display a public URL you can share (like `https://randomly-generated.trycloudflare.com`)
 
 Press **Ctrl+C** to stop the tunnel when you're done.
 
+**Note:** If cloudflared is not installed and Docker is not available, the command will show installation instructions for cloudflared.
+
 ## How It Works
 
 When you run `ddev share-cf`, the addon:
 
-1. Verifies `cloudflared` is installed on your host machine
+1. Detects if `cloudflared` is installed (host mode) or falls back to Docker mode
 2. Creates a temporary Cloudflare Tunnel pointing to your DDEV site
 3. Routes public traffic through Cloudflare's network to your local DDEV site
 4. No Cloudflare account or configuration required
 
 The tunnel URL changes each time you run the command (similar to `ddev share`).
+
+## Docker Mode vs Host Mode
+
+The addon supports two execution modes and automatically chooses the best one:
+
+### Docker Mode (Automatic Fallback)
+
+**When it activates:** If `cloudflared` is not installed on your host machine, the addon automatically uses Docker mode.
+
+**How it works:**
+- Uses the official `cloudflare/cloudflared` Docker image
+- Runs cloudflared in a container on DDEV's network
+- Connects to your DDEV web container using internal Docker networking
+- For named tunnels, mounts `~/.cloudflared` credentials as a read-only volume
+
+**Benefits:**
+- Zero installation required (besides Docker, which DDEV already needs)
+- Consistent environment across all platforms
+- Official Cloudflare image, always up-to-date
+- Works identically to host mode
+
+**Technical note:** Docker mode uses HTTP (`http://web:80`) for internal container-to-container communication. This is secure because:
+- The communication stays within Docker's isolated network
+- DDEV's self-signed HTTPS certificates would cause verification errors
+- The Cloudflare tunnel still provides HTTPS to the public internet
+
+### Host Mode (Traditional)
+
+**When it activates:** If `cloudflared` is installed on your host machine.
+
+**How it works:**
+- Uses the cloudflared binary installed on your system
+- Connects to DDEV via localhost port mapping
+- Reads credentials from `~/.cloudflared` directly
+
+**Benefits:**
+- Slightly faster startup (no container creation)
+- Works without Docker (though DDEV itself needs Docker)
+
+### Mode Detection
+
+The addon automatically detects which mode to use:
+
+```bash
+ddev share-cf
+# If cloudflared installed: Uses host mode (no message)
+# If cloudflared not installed: Shows "ℹ️ Using Docker mode (cloudflared not found on host)"
+# If neither available: Shows cloudflared installation instructions
+```
+
+Both modes work identically - all commands, flags, and features work the same way.
 
 ## Comparison with `ddev share`
 
@@ -201,9 +258,32 @@ If you're using Windows with WSL2 and getting a "cloudflared not found" error:
 
 ### cloudflared not found (macOS/Linux)
 
-If you get an error that `cloudflared` is not installed, the command will automatically detect your operating system and show you the appropriate installation instructions.
+If you see "cloudflared is not installed" and Docker is available, the addon will automatically use Docker mode - no action needed!
 
-You can also manually install cloudflared by following the instructions in the [Installation](#installation) section above.
+If Docker is also not available, the command will show installation instructions for cloudflared. You can either:
+1. Install Docker (recommended - DDEV already uses it)
+2. Install cloudflared by following the instructions in the [Installation](#installation) section above
+
+### Docker mode issues
+
+If Docker mode isn't working:
+
+1. **Verify DDEV is running:**
+   ```bash
+   ddev start
+   ```
+
+2. **Check Docker is running:**
+   ```bash
+   docker info
+   ```
+
+3. **Verify DDEV network exists:**
+   ```bash
+   docker network inspect ddev_default
+   ```
+
+If you prefer to use host mode, install cloudflared and the addon will automatically detect and use it.
 
 ### Command not found after installation
 

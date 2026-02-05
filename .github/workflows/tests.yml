@@ -32,5 +32,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bats
 
+      - name: Ensure Docker is running
+        run: |
+          docker info
+
+      - name: Test without cloudflared (Docker mode)
+        run: |
+          # Temporarily make cloudflared unavailable to test Docker fallback
+          if command -v cloudflared &> /dev/null; then
+            sudo mv $(which cloudflared) /tmp/cloudflared.backup || true
+          fi
+          bats tests/test.bats -f "Docker mode"
+          # Restore cloudflared if it was backed up
+          if [ -f /tmp/cloudflared.backup ]; then
+            sudo mv /tmp/cloudflared.backup $(dirname $(which bats))/cloudflared || true
+          fi
+
+      - name: Test with cloudflared (host mode)
+        run: |
+          # Install cloudflared if not present
+          if ! command -v cloudflared &> /dev/null; then
+            curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
+            sudo dpkg -i /tmp/cloudflared.deb
+          fi
+          bats tests/test.bats
+
       - name: Run tests
         run: bats tests
