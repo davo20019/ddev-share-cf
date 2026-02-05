@@ -41,6 +41,10 @@ teardown() {
     # Verify command has #ddev-generated marker
     echo "# Checking for #ddev-generated marker" >&3
     grep -q "#ddev-generated" .ddev/commands/host/share-cf
+
+    # Verify docker-compose file was installed
+    echo "# Checking if docker-compose.cloudflared.yaml exists" >&3
+    [ -f .ddev/docker-compose.cloudflared.yaml ]
 }
 
 @test "share-cf command shows cloudflared instructions when not installed" {
@@ -50,17 +54,139 @@ teardown() {
     ddev start -y
     ddev add-on get ${DIR}
 
-    # If cloudflared is not installed, command should show instructions
+    # If cloudflared is not installed, command should use Docker mode if Docker is available
     if ! command -v cloudflared &> /dev/null; then
         echo "# Testing share-cf without cloudflared installed" >&3
-        run ddev share-cf
-        [ "$status" -eq 1 ]
-        [[ "$output" =~ "cloudflared is not installed" ]]
-        [[ "$output" =~ "Installation Instructions" ]]
+
+        if docker info &> /dev/null; then
+            # Docker is available - should use Docker mode
+            echo "# Docker is available, should use Docker mode" >&3
+            run timeout 10s ddev share-cf || true
+            [[ "$output" =~ "Using Docker mode" ]]
+        else
+            # Docker not available - should show install instructions
+            echo "# Docker not available, should show install instructions" >&3
+            run ddev share-cf
+            [ "$status" -eq 1 ]
+            [[ "$output" =~ "cloudflared is not installed" ]]
+            [[ "$output" =~ "Installation Instructions" ]]
+            [[ "$output" =~ "Alternative: Docker mode" ]]
+        fi
     else
         echo "# cloudflared is installed, skipping this test" >&3
         skip "cloudflared is installed on this system"
     fi
+}
+
+@test "share-cf uses Docker mode when cloudflared not installed but Docker available" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    # Skip if cloudflared is installed
+    if command -v cloudflared &> /dev/null; then
+        skip "cloudflared is installed - can't test Docker fallback"
+    fi
+
+    # Skip if Docker not available
+    if ! docker info &> /dev/null; then
+        skip "Docker is not available"
+    fi
+
+    # Should detect Docker mode
+    run timeout 5s ddev share-cf || true
+    [[ "$output" =~ "Using Docker mode" ]]
+}
+
+@test "share-cf Docker mode can start quick tunnel" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    # Skip if cloudflared is installed (would use host mode)
+    if command -v cloudflared &> /dev/null; then
+        skip "cloudflared is installed - can't test Docker mode"
+    fi
+
+    # Skip if Docker not available
+    if ! docker info &> /dev/null; then
+        skip "Docker is not available"
+    fi
+
+    # Start tunnel and check for success indicators
+    timeout 10s ddev share-cf || true
+
+    # Check that container was created
+    run docker ps -a --filter name=ddev-ddev-share-cf-cloudflared
+    [[ "$output" =~ "cloudflared" ]]
+
+    # Cleanup
+    docker rm -f ddev-ddev-share-cf-cloudflared 2>/dev/null || true
+}
+
+@test "share-cf Docker mode cleanup on interrupt" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    # Skip if cloudflared is installed
+    if command -v cloudflared &> /dev/null; then
+        skip "cloudflared is installed - can't test Docker mode"
+    fi
+
+    # Skip if Docker not available
+    if ! docker info &> /dev/null; then
+        skip "Docker is not available"
+    fi
+
+    # Start tunnel in background and kill it
+    timeout 5s ddev share-cf >/dev/null 2>&1 &
+    local pid=$!
+    sleep 2
+    kill -INT $pid 2>/dev/null || true
+    wait $pid 2>/dev/null || true
+
+    # Verify cleanup happened - container should be stopped/removed
+    sleep 2
+    run docker ps --filter name=ddev-ddev-share-cf-cloudflared
+    [[ ! "$output" =~ "cloudflared" ]] || [[ "$output" =~ "Exited" ]]
+
+    # Final cleanup
+    docker rm -f ddev-ddev-share-cf-cloudflared 2>/dev/null || true
+}
+
+@test "share-cf Docker mode requires authentication for named tunnels" {
+    set -eu -o pipefail
+    cd ${TESTDIR}
+    ddev config --project-name=ddev-share-cf
+    ddev start -y
+    ddev add-on get ${DIR}
+
+    # Skip if cloudflared is installed
+    if command -v cloudflared &> /dev/null; then
+        skip "cloudflared is installed - can't test Docker mode"
+    fi
+
+    # Skip if Docker not available
+    if ! docker info &> /dev/null; then
+        skip "Docker is not available"
+    fi
+
+    # Skip if already authenticated
+    if [ -f "${HOME}/.cloudflared/cert.pem" ]; then
+        skip "User is already authenticated"
+    fi
+
+    # Attempt to create tunnel without auth
+    run ddev share-cf --create-tunnel test-tunnel
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Not authenticated" ]]
 }
 
 @test "share-cf command detects DDEV project" {

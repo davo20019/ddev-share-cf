@@ -1,0 +1,17 @@
+#ddev-generated
+version: '3.6'
+
+services:
+  cloudflared:
+    container_name: ddev-${DDEV_SITENAME}-cloudflared
+    image: cloudflare/cloudflared:latest
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    depends_on:
+      - web
+    # Default command - will be overridden by script
+    # Using HTTPS internally for better compatibility
+    command: tunnel --url https://web:443
+    volumes:
+      - "${HOME}/.cloudflared:/root/.cloudflared:ro"
