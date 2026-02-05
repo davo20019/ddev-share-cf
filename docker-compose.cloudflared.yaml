@@ -11,7 +11,7 @@ services:
     depends_on:
       - web
     # Default command - will be overridden by script
-    # Using HTTPS internally for better compatibility
-    command: tunnel --url https://web:443
+    # Using HTTP to avoid certificate verification issues with self-signed certs
+    command: tunnel --url http://web:80
     volumes:
       - "${HOME}/.cloudflared:/root/.cloudflared:ro"

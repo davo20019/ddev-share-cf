@@ -398,15 +398,9 @@ echo ""
 # Set DDEV_LOCALHOST_URL based on execution mode
 if [ "$EXECUTION_MODE" = "docker" ]; then
     # In Docker mode, connect to web container via internal networking
-    # DDEV's web container always serves on standard internal ports
-    # Check if HTTPS port is being used (common in DDEV)
-    if [ -n "$DDEV_HOST_HTTPS_PORT" ] && [ "$DDEV_HOST_HTTPS_PORT" != "" ]; then
-        # HTTPS is available, prefer it for better compatibility
-        DDEV_LOCALHOST_URL="https://web:443"
-    else
-        # Default to HTTP on standard internal port
-        DDEV_LOCALHOST_URL="http://web:80"
-    fi
+    # Always use HTTP to avoid certificate verification issues with DDEV's self-signed certs
+    # The tunnel itself provides HTTPS to the outside world
+    DDEV_LOCALHOST_URL="http://web:80"
 else
     # Host mode: connect via localhost on the mapped host port
     DDEV_LOCALHOST_URL="http://127.0.0.1:${DDEV_HOST_HTTP_PORT}"
