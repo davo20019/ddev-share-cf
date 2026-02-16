@@ -1,6 +1,4 @@
 #ddev-generated
-version: '3.6'
-
 services:
   cloudflared:
     container_name: ddev-${DDEV_SITENAME}-cloudflared
