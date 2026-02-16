@@ -1,0 +1,15 @@
+#ddev-generated
+services:
+  cloudflared:
+    container_name: ddev-${DDEV_SITENAME}-cloudflared
+    image: cloudflare/cloudflared:latest
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    depends_on:
+      - web
+    # Default command - will be overridden by script
+    # Using HTTP to avoid certificate verification issues with self-signed certs
+    command: tunnel --url http://web:80
+    volumes:
+      - "${HOME}/.cloudflared:/root/.cloudflared:ro"

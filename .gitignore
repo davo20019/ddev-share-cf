@@ -11,3 +11,7 @@ Thumbs.db
 
 # Test artifacts
 tests/testdata/
+
+./PR_TEMPLATE_FORMATTED.md
+./PR_DESCRIPTION.md
+./testing.md
